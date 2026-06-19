@@ -603,7 +603,7 @@
         if(f && f.classList.contains('fit')){
           f.style.width = (BASE_W * scale) + 'px';
           f.style.height = (BASE_H * scale) + 'px';
-          f.style.marginBottom = '28px';
+          f.style.marginBottom = (112 * scale) + 'px';   // 100%時に従来の4倍の縦余白
         }
       });
     }
