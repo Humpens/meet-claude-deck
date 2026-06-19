@@ -251,12 +251,14 @@
 
   @media (prefers-reduced-motion:reduce){*{transition:none!important;}body.presenting .slide.is-current{animation:none;}}
 
-  /* ===== Responsive: keep the fixed-design slide intact, scale it to fit narrow screens ===== */
+  /* ===== Responsive: render the fixed-design slide, scale it with transform to fit narrow screens ===== */
+  .fit{width:100%;}
   @media (max-width:1199px){
     html,body{overflow-x:hidden;}
     body:not(.presenting) .deck{display:flex;flex-direction:column;align-items:center;
       max-width:none;padding:18px 0 56px;}
-    body:not(.presenting) .slide{width:1152px;flex:none;}   /* JSの zoom で画面幅に縮小 */
+    body:not(.presenting) .fit{overflow:hidden;display:flex;justify-content:center;align-items:flex-start;}
+    body:not(.presenting) .fit > .slide{flex:none;margin:0;transform-origin:top center;}
   }
   /* phone: turn the side control dock into a compact bottom bar */
   @media (max-width:820px){
@@ -557,11 +559,32 @@
     }
     window.addEventListener('resize', function(){ if(body.classList.contains('presenting')) setScale(); });
 
-    // scroll-view responsiveness: render the 1152px design slide, scale to fit narrow screens
+    // scroll-view responsiveness: wrap each slide, then transform-scale the 1152px design to fit
+    slides.forEach(function(s){
+      var fit = document.createElement('div'); fit.className = 'fit';
+      s.parentNode.insertBefore(fit, s); fit.appendChild(s);
+    });
+    function clearFit(s){
+      s.style.width = ''; s.style.transform = '';
+      var f = s.parentElement;
+      if(f && f.classList.contains('fit')){ f.style.height = ''; f.style.marginBottom = ''; }
+    }
     function fitDeck(){
-      var z = Math.min(1, (window.innerWidth - 28) / BASE_W);
-      var apply = !body.classList.contains('presenting') && z < 1;
-      slides.forEach(function(s){ s.style.zoom = apply ? z : ''; });
+      var narrow = (window.innerWidth < 1200) && !body.classList.contains('presenting');
+      slides.forEach(function(s){
+        if(narrow){
+          var scale = (window.innerWidth - 22) / BASE_W;   // BASE_W = 1152
+          s.style.width = BASE_W + 'px';
+          s.style.transform = 'scale(' + scale + ')';
+          var f = s.parentElement;
+          if(f && f.classList.contains('fit')){
+            f.style.height = (BASE_H * scale) + 'px';      // BASE_H = 648
+            f.style.marginBottom = '28px';
+          }
+        } else {
+          clearFit(s);
+        }
+      });
     }
     window.addEventListener('resize', fitDeck);
     window.addEventListener('orientationchange', fitDeck);
@@ -571,7 +594,7 @@
     function enter(){
       idx = 0;   /* 常に表紙から開始 */
       body.classList.add('presenting');
-      slides.forEach(function(s){ s.style.zoom = ''; });  /* 再生中はzoom解除（transformでフィット）*/
+      slides.forEach(clearFit);   /* 再生中はスクロール用の縮小を解除（CSSのtransformでフィット）*/
       setScale();
       render();
       var el = document.documentElement;
