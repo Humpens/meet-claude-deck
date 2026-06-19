@@ -237,6 +237,28 @@
 
   @media (prefers-reduced-motion:reduce){*{transition:none!important;}body.presenting .slide.is-current{animation:none;}}
 
+  /* ===== Responsive: keep the fixed-design slide intact, scale it to fit narrow screens ===== */
+  @media (max-width:1199px){
+    html,body{overflow-x:hidden;}
+    body:not(.presenting) .deck{display:flex;flex-direction:column;align-items:center;
+      max-width:none;padding:18px 0 56px;}
+    body:not(.presenting) .slide{width:1152px;flex:none;}   /* JSの zoom で画面幅に縮小 */
+  }
+  /* phone: turn the side control dock into a compact bottom bar */
+  @media (max-width:820px){
+    .dock{top:auto;bottom:12px;right:50%;transform:translateX(50%);
+      flex-direction:row;align-items:center;gap:10px;max-height:none;
+      max-width:94vw;overflow-x:auto;padding:8px 11px;}
+    .dock .group{flex-direction:row;align-items:center;gap:7px;}
+    .dock .group + .group{border-top:none;border-left:1px solid rgba(255,255,255,.16);
+      padding-top:0;padding-left:10px;}
+    .group__title{display:none;}
+    .sw{width:24px;height:24px;}
+    .fbtn{width:auto;padding:6px 8px;}
+    .fbtn .nm{display:none;}
+    .play-btn{top:12px;left:12px;font-size:12px;padding:9px 14px 9px 13px;}
+  }
+
   @media print{
     @page{size:1280px 720px;margin:0;}
     .deck{max-width:none;margin:0;padding:0;}
@@ -499,9 +521,21 @@
     }
     window.addEventListener('resize', function(){ if(body.classList.contains('presenting')) setScale(); });
 
+    // scroll-view responsiveness: render the 1152px design slide, scale to fit narrow screens
+    function fitDeck(){
+      var z = Math.min(1, (window.innerWidth - 28) / BASE_W);
+      var apply = !body.classList.contains('presenting') && z < 1;
+      slides.forEach(function(s){ s.style.zoom = apply ? z : ''; });
+    }
+    window.addEventListener('resize', fitDeck);
+    window.addEventListener('orientationchange', fitDeck);
+    window.addEventListener('load', fitDeck);
+    fitDeck();
+
     function enter(){
       idx = 0;   /* 常に表紙から開始 */
       body.classList.add('presenting');
+      slides.forEach(function(s){ s.style.zoom = ''; });  /* 再生中はzoom解除（transformでフィット）*/
       setScale();
       render();
       var el = document.documentElement;
@@ -510,6 +544,7 @@
     function exit(){
       body.classList.remove('presenting');
       if(document.fullscreenElement && document.exitFullscreen){ document.exitFullscreen().catch(function(){}); }
+      fitDeck();   /* スクロール表示のフィットを復帰 */
     }
 
     document.getElementById('playBtn').addEventListener('click', enter);
