@@ -251,15 +251,23 @@
 
   @media (prefers-reduced-motion:reduce){*{transition:none!important;}body.presenting .slide.is-current{animation:none;}}
 
-  /* ===== Responsive: render the fixed-design slide, scale it with transform to fit narrow screens ===== */
-  .fit{width:100%;}
-  @media (max-width:1199px){
-    html,body{overflow-x:hidden;}
-    body:not(.presenting) .deck{display:flex;flex-direction:column;align-items:center;
-      max-width:none;padding:18px 0 56px;}
-    body:not(.presenting) .fit{overflow:hidden;display:flex;justify-content:center;align-items:flex-start;}
-    body:not(.presenting) .fit > .slide{flex:none;margin:0;transform-origin:top center;}
-  }
+  /* ===== Scroll view: render fixed-design slides, scale = auto-fit × user zoom ===== */
+  html,body{overflow-x:hidden;}
+  body:not(.presenting) .deck{display:flex;flex-direction:column;align-items:center;
+    max-width:none;width:100%;padding:30px 16px 80px;}
+  body:not(.presenting) .fit{overflow:visible;}
+  body:not(.presenting) .fit > .slide{flex:none;margin:0;transform-origin:top left;}
+
+  /* zoom control (scroll view only, bottom-right) */
+  .zoomctl{position:fixed;right:16px;bottom:16px;z-index:54;display:flex;align-items:center;gap:2px;
+    background:rgba(20,20,24,.9);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:4px;
+    box-shadow:0 8px 22px rgba(0,0,0,.34);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
+  .zoomctl button{width:28px;height:28px;border:none;background:transparent;color:#fff;cursor:pointer;
+    border-radius:50%;display:flex;align-items:center;justify-content:center;transition:background .15s;}
+  .zoomctl button:hover{background:rgba(255,255,255,.16);}
+  .zoomctl .pct{min-width:42px;text-align:center;font-family:"Outfit",sans-serif;font-size:11px;font-weight:700;
+    color:#d6d6dc;cursor:pointer;user-select:none;}
+  body.presenting .zoomctl{display:none!important;}
   /* phone: turn the side control dock into a compact bottom bar */
   @media (max-width:820px){
     .dock{top:auto;bottom:12px;right:50%;transform:translateX(50%);
@@ -284,7 +292,7 @@
     .slide{margin:0;border-radius:0;box-shadow:none;page-break-after:always;width:1280px;height:720px;aspect-ratio:auto;border-width:0;
       -webkit-print-color-adjust:exact;print-color-adjust:exact;}
     .slide .pageno{box-shadow:none;}
-    .dock,.dock-fab,.play-btn,.present-ui{display:none!important;}
+    .dock,.dock-fab,.play-btn,.present-ui,.zoomctl{display:none!important;}
   }
 </style>
 </head>
@@ -342,6 +350,16 @@
 <button class="dock-fab" id="dockFab" type="button" aria-label="表示設定を開く" title="配色・フォント設定">
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><circle cx="9" cy="7" r="2.5" fill="currentColor" stroke="none"/><line x1="4" y1="14" x2="20" y2="14"/><circle cx="15" cy="14" r="2.5" fill="currentColor" stroke="none"/><line x1="4" y1="21" x2="20" y2="21"/><circle cx="8" cy="21" r="2.5" fill="currentColor" stroke="none"/></svg>
 </button>
+
+<div class="zoomctl" id="zoomCtl" role="group" aria-label="スライドの大きさ調整">
+  <button id="zoomOut" type="button" aria-label="小さく" title="小さく">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"/></svg>
+  </button>
+  <span class="pct" id="zoomPct" title="100%に戻す">100%</span>
+  <button id="zoomIn" type="button" aria-label="大きく" title="大きく">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+  </button>
+</div>
 
 <main class="deck">
 
@@ -564,25 +582,28 @@
       var fit = document.createElement('div'); fit.className = 'fit';
       s.parentNode.insertBefore(fit, s); fit.appendChild(s);
     });
+    var ZKEY = "intilaq-deck-zoom";
+    var userZoom = 1; try{ var _z=parseFloat(localStorage.getItem(ZKEY)); if(_z>0) userZoom=_z; }catch(e){}
+
     function clearFit(s){
       s.style.width = ''; s.style.transform = '';
       var f = s.parentElement;
-      if(f && f.classList.contains('fit')){ f.style.height = ''; f.style.marginBottom = ''; }
+      if(f && f.classList.contains('fit')){ f.style.height = ''; f.style.width = ''; f.style.marginBottom = ''; }
     }
     function fitDeck(){
-      var narrow = (window.innerWidth < 1200) && !body.classList.contains('presenting');
+      if(body.classList.contains('presenting')){ slides.forEach(clearFit); return; }
+      var avail = window.innerWidth;
+      var base = Math.min(1, (avail - 24) / BASE_W);        // 既定は画面幅にフィット（≤1）
+      var maxScale = (avail - 44) / BASE_W;                 // 横はみ出し防止の上限
+      var scale = Math.max(0.35, Math.min(base * userZoom, maxScale));
       slides.forEach(function(s){
-        if(narrow){
-          var scale = (window.innerWidth - 22) / BASE_W;   // BASE_W = 1152
-          s.style.width = BASE_W + 'px';
-          s.style.transform = 'scale(' + scale + ')';
-          var f = s.parentElement;
-          if(f && f.classList.contains('fit')){
-            f.style.height = (BASE_H * scale) + 'px';      // BASE_H = 648
-            f.style.marginBottom = '28px';
-          }
-        } else {
-          clearFit(s);
+        s.style.width = BASE_W + 'px';
+        s.style.transform = 'scale(' + scale + ')';
+        var f = s.parentElement;
+        if(f && f.classList.contains('fit')){
+          f.style.width = (BASE_W * scale) + 'px';
+          f.style.height = (BASE_H * scale) + 'px';
+          f.style.marginBottom = '28px';
         }
       });
     }
@@ -590,6 +611,19 @@
     window.addEventListener('orientationchange', fitDeck);
     window.addEventListener('load', fitDeck);
     fitDeck();
+
+    // zoom in/out for the scroll view
+    var zoomPct = document.getElementById('zoomPct');
+    function setUserZoom(z){
+      userZoom = Math.max(0.5, Math.min(z, 1.6));
+      try{ localStorage.setItem(ZKEY, String(userZoom)); }catch(e){}
+      if(zoomPct) zoomPct.textContent = Math.round(userZoom*100) + '%';
+      fitDeck();
+    }
+    var _zin=document.getElementById('zoomIn'), _zout=document.getElementById('zoomOut');
+    if(_zin)  _zin.addEventListener('click', function(){ setUserZoom(Math.round((userZoom+0.1)*10)/10); });
+    if(_zout) _zout.addEventListener('click', function(){ setUserZoom(Math.round((userZoom-0.1)*10)/10); });
+    if(zoomPct){ zoomPct.addEventListener('click', function(){ setUserZoom(1); }); zoomPct.textContent = Math.round(userZoom*100) + '%'; }
 
     function enter(){
       idx = 0;   /* 常に表紙から開始 */
